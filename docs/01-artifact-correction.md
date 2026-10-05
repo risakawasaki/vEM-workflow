@@ -39,19 +39,14 @@ Correct lateral drift between consecutive slices.
 
 ### 1.2 Destriping
 
-Striping appears as vertical stripes along the milling direction. Concentrated horizontal stripes may also appear from election accumulation.
-Reduce them with the combined wavelet-Fourier filter (Münch et al., 2009).
+Stripes appear along the milling direction and from electron accumulation. Reduce them with the combined wavelet-Fourier filter (Münch et al., 2009).
+The wavelet-FFT filtering is done with:
+1. Decomposition of each slice with a 2D Daubechies wavelet transform.
+2. Damping of stripe in the detail coefficients with a Gaussian filter in Fourier space.
+3. Reconstruction of slice.
 
-1. Decompose each slice with a 2D wavelet transform.
-2. In the detail coefficients for the stripe direction, apply a Gaussian damping filter in Fourier space.
-3. Reconstruct the slice.
+The scripts are in [`scripts/destriping/`](../scripts/destriping/):
 
-```python
-import numpy as np
-import pywt
-
-def destripe(img, wavelet="wavelet type", level=DecompLevel, sigma=GaussianDamping):
-  """Wavelet-FFT destriping (Münch et al., 2009) for striping."""
-  coeffs = pywt.wavedec2(img.astype(np.float32), wavelet, level = level)
-  new = [coeffs[0]]
-  for cH
+| Script | Purpose |
+|---|---|
+| `01-bestParameters.py
