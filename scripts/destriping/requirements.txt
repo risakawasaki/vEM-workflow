@@ -1,0 +1,8 @@
+numpy
+PyWavelets
+mpmath
+scikit-image
+tifffile
+matplotlib
+Pillow
+tqdm
