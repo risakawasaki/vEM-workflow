@@ -1,7 +1,7 @@
 # 01. Artifact Correction
 
 ## Goal
-Remove acquisition artifacts from raw cryo-FIB/SEM image stacks, mainly slice-to-slice drift, stripes, and noise. The output is a clean, contrast-enhanced volume.
+Remove acquisition artifacts from raw cryo-FIB/SEM image stacks, mainly slice-to-slice drift, stripes, and noise. The output is a destiriped, noise reduced, contrast-enhanced volume.
 
 ## Inputs
 | Item | Format | Notes
