@@ -2,24 +2,25 @@
 ## Goal
 Extract features for each proofread object, summarize them per cell, and describe the sample: typical values, spread, and how much cells differ from each other.
 
-If you have more than one sample, for example control and disease donors, [Part B](#part-b-optional-compare-samples-or-groups) covers how to compare them.
-
 ## Inputs
 | Item | Format | Notes |
 |---|---|---|
 | Proofread instance labels | `.mrc` | `<output>.mrc` from [3. Proofreading](03-proofreading.md) |
 | Cell map | `.csv` | `<output>_cellmap.csv`: `instance_id → cell_id` |
 | Cell labels (optional) | `.mrc`/`.tif` | Needed for volume fractions (object volume per cell volume) |
-| Sample metadata (Part B only) | `.csv` | One row per volume: donor, group, covariates; see [Part B](#part-b-optional-compare-samples-or-groups) |
 | Voxel size | nm, **x y z** | The same values used during proofreading |
 
 ## Requirements
-- Python 3.10+
+Two environments are used (see [Scripts](#scripts)):
+
 - **Feature extraction:** Docker, or Python 3.11 with PyRadiomics 3.0.1 (see [4.1](#41-extract-shape-features-with-pyradiomics))
-- **Summaries and plots:** Python 3.10+ with `numpy`, `pandas`, `scipy`, `matplotlib`, `mrcfile` (plus `statsmodels` for Part B)
+- **Analysis environment** for the other scripts: Python 3.10+ with `numpy`, `pandas`, `scipy`, `matplotlib`, `mrcfile`, `statsmodels`
+
 ```bash
 pip install numpy pandas scipy matplotlib mrcfile statsmodels
 ```
+Run the scripts from `scripts/analysis/`, or give their full path.
+
 
 ## Overview
 
@@ -31,7 +32,6 @@ flowchart LR
     C --> D[4.3 Summarize per cell]
     D --> E[4.4 Describe the sample]
     E --> F[4.5 Report]
-    D -.-> G[Part B: Compare samples<br/>or groups, optional]
 ```
 ## Procedure
 
@@ -157,6 +157,114 @@ The script computes the 14 PyRadiomics shape features. Each is a column named `o
 > **Surface area is overestimated** because the mesh follows the voxel staircase, more so with anisotropic voxels (in our tests: about +9% for isotropic voxels, +19% at 5 × 5 × 20 nm). Sphericity and surface-to-volume ratio inherit this bias. It's consistent across objects measured at the same voxel size, so comparisons within a dataset are fine, but don't compare absolute surface areas with studies at different voxel sizes. Mesh volume is accurate to within about 1%.
 
 #### Combine volumes
+Combine the per-volume results into one table with `combine_results.py`. A single volume works too.
 
-Combine the per-volume results into one table (a single volume works too), keep only successful rows, and flag objects cut off by the volume edge (the script doesn't record this). Use `combine-volumes.py` (in [`scripts/analysis/`](../scripts/analysis/))
+```bash
+python combine_results.py \
+    --volumes       vol01 vol02 \
+    --radiomics_csv "results/{volume}_radiomics.csv" \
+    --instances_mrc "data/{volume}_instances.mrc" \
+    --out           objects.csv
+```
+`{volume}` in the paths is replaced by each volume ID. The script:
 
+- keeps rows with `status == ok` and reports how many objects failed per volume
+- flags objects cut off by the edge of the volume (`touches_border`), which the radiomics script doesn't record
+- adds `volume_id` and a cell ID that is unique across volumes (`cell_uid`, e.g. `vol01_5`)
+- adds short names for the most-used features: `volume_um3`, `surface_area_um2`, `sphericity`, `elongation`, `flatness`, `max_diameter_um`, and `aspect_ratio` (major / minor axis)
+
+This works for both full-volume and per-cell runs. For per-cell runs, the border flag is still computed from the full volume, using each object's original ID: per-cell crops are cut tightly around the objects, so nearly every object touches a crop edge even when it is complete.
+
+### 4.2 Quality filters
+Decide these filters **before** looking at the results, and apply them the same way to every volume. `filter_objects.py` applies them and records how many objects each removed:
+
+```bash
+python filter_objects.py \
+    --objects       objects.csv \
+    --out           objects_filtered.csv \
+    --min_voxels    TODO \
+    --exclude_cells vol01_12 vol01_15
+```
+| Filter | Why | Default | Flag |
+|---|---|---|---|
+| Remove unassigned objects (`cell_id == 0`) | Can't be attributed to a cell | On | `--keep_unassigned` to turn off |
+| Remove objects touching the volume border | Their size and shape are truncated | On | `--keep_border` to turn off |
+| Remove very small objects | Leftover fragments and noise; shape features are unreliable for objects only a few voxels across | Off | `--min_voxels N` |
+| Remove downsampled objects | Their shape features are measured on a coarser grid (see 4.1) | Off | `--exclude_downsampled` |
+| Remove incompletely imaged cells | Per-cell summaries are biased | Off | `--exclude_cells` with `cell_uid` values |
+
+The script prints the number of objects removed by each filter and saves it as `objects_filtered_filter_log.csv`; include it in the report. If downsampled objects remain, it warns you to check that results hold with `--exclude_downsampled`.
+
+> **Border exclusion biases toward small objects.** Large objects are more likely to touch the border, so removing border objects removes proportionally more large ones. Use counts and volume fractions from all objects (4.3), and shape metrics from complete objects only.
+
+### 4.3 Describe the sample
+`describe_sample.py` summarizes each cell, summarizes the sample, finds redundant features, and plots each object grouped by cell:
+
+```bash
+python describe_sample.py \
+    --objects       objects_filtered.csv \
+    --out_dir       results/description \
+    --features      volume_um3 surface_area_um2 sphericity elongation flatness max_diameter_um \
+    --plot_features volume_um3 sphericity
+```
+
+| Output | Contents |
+|---|---|
+| `per_cell.csv` | One row per cell: number of objects and the median of each feature |
+| `summary_objects.csv` | Median and IQR of each feature over all objects, pooled |
+| `summary_cells.csv` | Median and IQR of the per-cell medians, and `cv_between_cells` |
+| `redundant_pairs.csv` | Feature pairs with \|Spearman ρ\| > 0.9 (set with `--corr_threshold`) |
+| `per_cell_<feature>.svg/.png` | Every object, grouped by cell, with each cell's median |
+
+**Two levels of summary.** Each feature is summarized over all objects pooled, and across cells (one median per cell). Taking a median per cell gives each cell equal weight regardless of how many objects it contains, so cells with many small objects don't dominate. The spread across cells shows how much cells differ from each other, which the pooled numbers hide. `cv_between_cells` (coefficient of variation of the cell medians) shows which features vary most between cells.
+
+**Median and IQR** are used rather than mean and standard deviation, because object sizes are usually right-skewed, with a few very large objects.
+
+**Redundant features.** Many features measure nearly the same thing; volume, surface area, and diameter all track size. For each pair listed in `redundant_pairs.csv`, report one feature.
+
+**Plots.** Size features (volume, area, lengths) are plotted on a log axis, and bounded shape features (sphericity, elongation, flatness) on a linear axis. Colors follow the Stanford palette.
+
+### 4.4 (Optional) Volume fraction per cell
+If you have a cell label volume (one ID per cell, matching the `cell_id` values in the cell map, e.g. the `--cell` volume given to the proofreader), `volume_fraction.py` computes the fraction of each cell's volume occupied by objects:
+
+```bash
+python volume_fraction.py \
+    --instances_mrc data/vol01_instances.mrc \
+    --cells_mrc     data/vol01_cells.mrc \
+    --volume_id     vol01 \
+    --spacing_nm    5 5 20 \
+    --out           results/vol01_volume_fraction.csv
+```
+
+Run it once per volume. It uses all objects, including those touching the border. Volume fraction only makes sense for cells that are fully inside the volume, or when you compare equivalent regions (e.g. the same cell compartment) across samples. The script warns if object voxels lie outside any cell.
+
+## Scripts
+All scripts are in [`scripts/analysis/`](../scripts/analysis/). Run any of them with `--help` for the full list of options.
+
+| Script | Step | Environment |
+|---|---|---|
+| `export_cells_to_mrc.py` | 4.1 (optional): per-cell crops | Any Python with `numpy`, `pandas`, `scipy`, `mrcfile` |
+| `radiomics_per_mito.py` | 4.1: shape features | Docker image (`Dockerfile.radiomics`) or Python 3.11 with PyRadiomics 3.0.1 |
+| `combine_results.py` | 4.1: combine volumes, flag border objects | Analysis environment |
+| `filter_objects.py` | 4.2: quality filters | Analysis environment |
+| `describe_sample.py` | 4.3: summaries, redundant features, per-cell plots | Analysis environment |
+| `volume_fraction.py` | 4.4 (optional): volume fraction per cell | Analysis environment |
+
+## Outputs
+| File | Step | Contents |
+|---|---|---|
+| `exports/<volume>/cell_<id>/` | 4.1 | Per-cell crops (optional) |
+| `results/<volume>_radiomics.csv` | 4.1 | PyRadiomics output, one row per object |
+| `objects.csv` | 4.1 | Combined table: features, cell, volume, border flag |
+| `objects_filtered.csv`, `objects_filtered_filter_log.csv` | 4.2 | Filtered table, and objects removed per filter |
+| `results/description/per_cell.csv` | 4.3 | One row per cell: object count and feature medians |
+| `results/description/summary_objects.csv`, `summary_cells.csv` | 4.3 | Median and IQR per feature, at object and cell level |
+| `results/description/redundant_pairs.csv` | 4.3 | Strongly correlated feature pairs |
+| `results/description/per_cell_<feature>.svg/.png` | 4.3 | Per-cell distribution plots |
+| `results/<volume>_volume_fraction.csv` | 4.4 | Volume fraction per cell (optional) |
+
+## References
+- van Griethuysen JJM, Fedorov A, Parmar C, et al. (2017). Computational radiomics system to decode the radiographic phenotype. *Cancer Research* 77(21):e104–e107.
+
+---
+**Previous step:** [3. Proofreading](03-proofreading.md)
