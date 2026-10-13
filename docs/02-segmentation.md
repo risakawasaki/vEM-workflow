@@ -19,7 +19,7 @@ Training labels are built up iteratively: each model's predictions are corrected
 
 ```mermaid
 flowchart TD
-    A[Corrected volume] --> B[2.1 Choose ResEnc preset]
+    A[Filtered volume] --> B[2.1 Choose ResEnc preset]
     B --> C[2.2 Initial labels]
     C --> D[2.3–2.4 Train first 2D model]
     D --> E{Need more labels?}
@@ -39,7 +39,7 @@ flowchart TD
 ## Inputs
 | Item | Format | Notes |
 |---|---|---|
-| Corrected volume | `.tif ` stack or `.mrc` | Output of [1. Artifact correction](01-artifact-correction.md) |
+| Filtered volume | `.tif ` stack or `.mrc` | Output of [1. Artifact correction](01-artifact-correction.md) |
 | Voxel size | (z, y, x) nm | Needed for 3D training and instance separation |
 
 ## Requirements, nnU-Net installation, and setup
@@ -221,7 +221,7 @@ import tifffile
 from scipy import ndimage as ndi
 from skimage import exposure, filters, restoration
 
-vol = tifffile.imread("corrected_volume.tif")       # (z, y, x)
+vol = tifffile.imread("filtered_volume.tif")       # (z, y, x)
 img = vol[100]                                       # one slice, for testing
 
 def to_uint16(x):
