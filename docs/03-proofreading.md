@@ -197,3 +197,95 @@ Then fix the rest in the **Cell** tab:
 | **Toggle cell_ids layer** | Show or hide the cell labels |
 
 Use **Next / Prev unmapped** in the Navigation tab to find objects that still have no cell. The mapping is saved as `<output>_cellmap.csv`.
+
+### 3.5 Check in 3D
+
+Switch to 3D with napari's 2D/3D toggle (bottom left of the viewer). The z scale switches automatically to the real voxel spacing, so objects keep their true proportions. Check that:
+
+- Objects are continuous through the slices, without steps, gaps, or holes
+- Neighboring objects that should be separate have different colors
+- No small floating fragments remain
+
+Labels look blocky in 3D. For a smoother view, use **View → Apply Laplacian Smoothing** on the selected label. It adds a smoothed surface as a new layer and doesn't change the labels, so you can switch between the two.
+
+| Parameter | Default | Effect |
+|---|---|---|
+| `smoothing_factor` | `1.0` | How far each vertex moves toward its neighbors per iteration |
+| `smoothing_iterations` | `10` | Number of smoothing passes; more is smoother but shrinks thin parts |
+
+**Screenshot PNG + SVG 600 dpi** exports the current view at publication resolution.
+
+### 3.6 Save
+
+Use the **Save** tab during the session:
+
+| Button | What it writes |
+|---|---|
+| **Save MRC** | The instance labels as MRC, to a folder you choose |
+| **Save snapshot (.npy + cellmap.csv)** | A fast checkpoint of the labels and the cell map |
+
+An MRC is also written automatically when you close napari, and you're warned on close if you never saved one. Don't rely on the automatic save alone: if the destination folder is unavailable when you close (for example an unmounted network drive), the save fails. Click **Save MRC** regularly.
+
+**Resume a session** without recomputing:
+
+```bash
+python napari_session.py \
+    --load_instances instances_AUTO.mrc \
+    --queue_csv      instances_review_queue.csv \
+    --cell_id_csv    instances_cellmap.csv \
+    --raw            corrected_volume.mrc \
+    --output         instances_v2.mrc \
+    --spacing_nm     5 5 20 \
+    --napari
+```
+
+To continue from your latest edits, use your last saved MRC for `--load_instances` instead of `_AUTO.mrc`. Give each session a new `--output` name so earlier versions are kept.
+
+Record for each volume: who proofread it, how long it took, and roughly how many edits of each type. These numbers show where the segmentation model is weakest and are useful when reporting the workflow.
+
+## Feeding corrections back into training
+
+Proofread labels are high-quality training data. To improve the segmentation model:
+
+1. Convert the instances to a semantic mask (`labels > 0`).
+2. Add the corrected slices or sub-volumes to a new nnU-Net dataset ([2.3](02-segmentation.md#23-format-the-dataset)).
+3. Retrain, and compare with the previous model on the held-out region ([2.7](02-segmentation.md#27-compare-models)).
+
+Don't add the held-out test region to training, or the comparison is no longer fair.
+
+## Outputs
+
+All file names come from `--output` (or the save folder chosen in the dialog):
+
+| File | Contents |
+|---|---|
+| `<output>.mrc` | Final instance labels |
+| `<output>_AUTO.mrc` | Automatic instances, before any proofreading |
+| `<output>_review_queue.csv` | One row per instance: ID, cell ID, score, reasons, volume, and shape features |
+| `<output>_cellmap.csv` | Final `instance_id → cell_id` mapping |
+| `<output>.npy` | In-session checkpoint from **Save snapshot** |
+
+In the review queue, `-1` in `max_radius_nm` or `n_strong_peaks` means the feature was skipped for speed, not that it is zero. Filter on `>= 0` before computing statistics on these columns. A `cell_id` of `0` means unassigned.
+
+## Troubleshooting
+
+| Problem | Likely cause | Fix |
+|---|---|---|
+| napari won't import | Python 3.13 or newer | Use Python 3.10–3.12 |
+| Everything is one giant label | Objects touch | Add `--pre_split_xy_erosion_iters 1` or `--watershed_first`, then split the rest by hand |
+| Too many over-split objects | Watershed too aggressive | Raise `--ws_strong_peak_frac` and `--min_sep_nm`, or turn splitting off and merge by hand |
+| Wrong proportions in 3D | `--spacing_nm` wrong or in the wrong order | It's `x y z`; z is usually the largest |
+| Split doesn't produce separate parts | Seeds not inside the selected label, or too close together | Select the label first; place seeds clearly inside each part |
+| Painting overwrites a neighbor | `preserve labels` is off | Turn on `preserve labels` |
+| Cell IDs are all 0 after `--semantic` | A semantic mask carries no cell information | Add `--cell` with `--remap_from_cell`, or assign in the **Cell** tab |
+| Edits lost after closing | Automatic save on close failed | Use **Save MRC** during the session; reload `_AUTO.mrc` if needed |
+| Viewer is slow | Large raw volume | Hide `raw_vem` in the layer list (hidden automatically above 200 million voxels) |
+
+## References
+
+- napari contributors. napari: a multi-dimensional image viewer for Python. Zenodo. `TODO`: version DOI.
+- van der Walt S, et al. (2014). scikit-image: image processing in Python. *PeerJ* 2:e453.
+- Goddard TD, et al. (2018). UCSF ChimeraX: Meeting modern challenges in visualization and analysis. *Protein Science* 27(1):14–25. (Laplacian smoothing follows ChimeraX's surface smoothing.)
+
+---
+**Previous step:** [2. Segmentation](02-segmentation.md)
