@@ -283,8 +283,7 @@ In the review queue, `-1` in `max_radius_nm` or `n_strong_peaks` means the featu
 
 ## References
 
-- napari contributors. napari: a multi-dimensional image viewer for Python. Zenodo. `TODO`: version DOI.
-- van der Walt S, et al. (2014). scikit-image: image processing in Python. *PeerJ* 2:e453.
+- napari contributors. napari: a multi-dimensional image viewer for Python. Zenodo. doi:10.5281/zenodo.3555620.
 - Goddard TD, et al. (2018). UCSF ChimeraX: Meeting modern challenges in visualization and analysis. *Protein Science* 27(1):14–25. (Laplacian smoothing follows ChimeraX's surface smoothing.)
 
 ---
