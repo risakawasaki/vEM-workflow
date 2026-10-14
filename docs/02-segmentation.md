@@ -109,8 +109,7 @@ nnUNetv2_train <ID_3D> 3d_fullres 0 -p $PLANS
 ```
 
 ### 2.7 Compare models
-Evaluate every model on a held-out test region that was never used for training or validation. Metrics such as Dice Similarity Score, precision, and recall are most commonly used.
-[Interactive Dice / precision / recall explorer](https://risakawasaki.github.io/vEM-workflow/segmentation-metrics.html)
+Evaluate every model on a held-out test region that was never used for training or validation. Metrics such as Dice Similarity Score, precision, and recall are most commonly used. If you're not familiar with these metrics, check out the [interactive Dice / precision / recall explorer](https://risakawasaki.github.io/vEM-workflow/segmentation-metrics.html)
 
 ### 2.8 Predict the full volume
 ```bash
