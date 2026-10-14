@@ -287,4 +287,4 @@ In the review queue, `-1` in `max_radius_nm` or `n_strong_peaks` means the featu
 - Goddard TD, et al. (2018). UCSF ChimeraX: Meeting modern challenges in visualization and analysis. *Protein Science* 27(1):14–25. (Laplacian smoothing follows ChimeraX's surface smoothing.)
 
 ---
-**Previous step:** [2. Segmentation](02-segmentation.md) · **Next step:** [3. Statistical Analysis](04-statistical-analysis.md)
+**Previous step:** [2. Segmentation](02-segmentation.md) · **Next step:** [4. Statistical Analysis](04-statistical-analysis.md)
