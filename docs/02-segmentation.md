@@ -110,7 +110,7 @@ nnUNetv2_train <ID_3D> 3d_fullres 0 -p $PLANS
 
 ### 2.7 Compare models
 Evaluate every model on a held-out test region that was never used for training or validation. Metrics such as Dice Similarity Score, precision, and recall are most commonly used.
-[Try the interactive Dice / precision / recall explorer](...github.io/<repo>/segmentation-metrics.html)
+[Try the interactive Dice / precision / recall explorer](github.io/<repo>/interactive/segmentation-metrics.html)
 
 ### 2.8 Predict the full volume
 ```bash
