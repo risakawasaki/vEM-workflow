@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segmentation metrics explorer</title>
+<style>
+:root{
+  --text-primary:#2E2D29;--text-secondary:#53565A;--text-muted:#7F7776;
+  --surface-0:#ffffff;--surface-1:#F4F4F4;--border:rgba(46,45,41,.15);--border-strong:rgba(46,45,41,.3);
+  --bg-accent:#E6F2F4;--text-accent:#005A6A;--radius:8px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --text-primary:#ECEBE8;--text-secondary:#B6B1A9;--text-muted:#8A857E;
+    --surface-0:#1C1B19;--surface-1:#2A2926;--border:rgba(255,255,255,.14);--border-strong:rgba(255,255,255,.28);
+    --bg-accent:#0E3A42;--text-accent:#9FD8E2;
+  }
+}
+:root[data-theme="dark"]{
+  --text-primary:#ECEBE8;--text-secondary:#B6B1A9;--text-muted:#8A857E;
+  --surface-0:#1C1B19;--surface-1:#2A2926;--border:rgba(255,255,255,.14);--border-strong:rgba(255,255,255,.28);
+  --bg-accent:#0E3A42;--text-accent:#9FD8E2;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);font-family:var(--font-sans);font-size:15px;line-height:1.6}
+main{max-width:720px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:22px;font-weight:500;margin:0 0 4px}
+.sub{color:var(--text-secondary);font-size:14px;margin:0 0 16px}
+button{font:inherit;font-size:13px;color:var(--text-primary);background:transparent;border:0.5px solid var(--border-strong);border-radius:var(--radius);padding:6px 12px;cursor:pointer}
+button:hover{background:var(--surface-1)}
+input[type=range]{accent-color:#8C1515}
+.lg{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary)}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;flex-shrink:0}
+.row{display:flex;align-items:center;gap:12px;margin:8px 0}
+.row label{font-size:13px;color:var(--text-secondary);min-width:60px}
+.mc{background:var(--surface-1);border-radius:var(--radius);padding:12px 14px}
+.mc .l{font-size:13px;color:var(--text-secondary)}
+.mc .v{font-size:24px;font-weight:500}
+.mc .f{font-size:12px;color:var(--text-muted);font-family:var(--font-mono)}
+.mc .q{font-size:13px;margin-top:10px;line-height:1.5}
+.mc .h{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5}
+.bar{height:6px;border-radius:3px;background:var(--border);margin-top:8px;overflow:hidden}
+.bar span{display:block;height:100%}
+.note{font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0}
+.note b{color:var(--text-primary);font-weight:500}
+</style>
+</head>
+<body>
+<main>
+<h1>Dice, precision, and recall</h1>
+<p class="sub">Shift or resize the predicted mask and watch how each metric responds.</p>
+
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin:0 0 8px">
+  <span class="lg"><span class="sw" style="background:#279989"></span>TP: predicted and true</span>
+  <span class="lg"><span class="sw" style="background:#E98300"></span>FP: predicted, not true</span>
+  <span class="lg"><span class="sw" style="background:#8C1515"></span>FN: true, missed</span>
+</div>
+<canvas id="cv" width="680" height="240" style="width:100%;display:block;border:0.5px solid var(--border);border-radius:12px"></canvas>
+
+<div style="margin-top:12px">
+  <div class="row"><label for="dx">Shift</label><input type="range" id="dx" min="-200" max="200" step="1" value="40" style="flex:1"><span id="dxo" style="font-size:13px;min-width:40px;text-align:right">40</span></div>
+  <div class="row"><label for="sc">Size</label><input type="range" id="sc" min="40" max="170" step="1" value="100" style="flex:1"><span id="sco" style="font-size:13px;min-width:40px;text-align:right">100%</span></div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">
+  <button onclick="setP(0,100)">Perfect</button>
+  <button onclick="setP(0,150)">Over-segmented</button>
+  <button onclick="setP(0,60)">Under-segmented</button>
+  <button onclick="setP(120,100)">Shifted</button>
+</div>
+
+<div id="diag" style="background:var(--bg-accent);color:var(--text-accent);border-radius:var(--radius);padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:12px"></div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+  <div class="mc"><div class="l">Precision</div><div class="v" id="pv">–</div><div class="f">TP / (TP + FP)</div><div class="bar"><span id="pb" style="background:#E98300"></span></div>
+    <div class="q">Of everything I predicted, how much was real?</div>
+    <div class="h">Only orange hurts it. A prediction tucked entirely inside the object scores 1.00 even if it misses most of it.</div></div>
+  <div class="mc"><div class="l">Recall</div><div class="v" id="rv">–</div><div class="f">TP / (TP + FN)</div><div class="bar"><span id="rb" style="background:#8C1515"></span></div>
+    <div class="q">Of everything real, how much did I catch?</div>
+    <div class="h">Only red hurts it. A prediction that swallows the object plus its neighbors still scores 1.00.</div></div>
+  <div class="mc"><div class="l">Dice</div><div class="v" id="dv">–</div><div class="f">2TP / (2TP + FP + FN)</div><div class="bar"><span id="db" style="background:#279989"></span></div>
+    <div class="q">How well do the two masks overlap overall?</div>
+    <div class="h">Harmonic mean of precision and recall, so it's high only when orange and red are both small. It doesn't say which error you made.</div></div>
+</div>
+
+<div style="border-top:0.5px solid var(--border);margin-top:16px;padding-top:12px;display:grid;gap:8px">
+  <p class="note"><b>No true negatives.</b> The empty background appears in none of these formulas, which is why they work for small objects in large volumes where pixel accuracy would look great even for an empty prediction.</p>
+  <p class="note"><b>Dice vs IoU.</b> Dice = 2·IoU / (1 + IoU), so Dice always reads a bit higher for the same mask. IoU here: <span id="iou" style="font-family:var(--font-mono)">–</span></p>
+  <p id="cnt" style="font-size:12px;color:var(--text-muted);margin:0"></p>
+</div>
+</main>
+
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+const W=680,H=240,C=8,gx=340,gy=120,grx=150,gry=62;
+function inE(x,y,a0,b0,rx,ry){const a=(x-a0)/rx,b=(y-b0)/ry;return a*a+b*b<=1}
+function draw(){
+  const dx=+document.getElementById('dx').value,s=+document.getElementById('sc').value/100;
+  document.getElementById('dxo').textContent=dx;
+  document.getElementById('sco').textContent=Math.round(s*100)+'%';
+  cx.clearRect(0,0,W,H);let tp=0,fp=0,fn=0;
+  for(let x=0;x<W;x+=C)for(let y=0;y<H;y+=C){
+    const px=x+C/2,py=y+C/2,g=inE(px,py,gx,gy,grx,gry),p=inE(px,py,gx+dx,gy,grx*s,gry*s);
+    let col=null;if(g&&p){tp++;col='#279989'}else if(p){fp++;col='#E98300'}else if(g){fn++;col='#8C1515'}
+    if(col){cx.fillStyle=col;cx.fillRect(x+0.5,y+0.5,C-1,C-1)}
+  }
+  const pr=tp+fp?tp/(tp+fp):0,rc=tp+fn?tp/(tp+fn):0,d=(2*tp+fp+fn)?2*tp/(2*tp+fp+fn):0,io=(tp+fp+fn)?tp/(tp+fp+fn):0;
+  [['p',pr],['r',rc],['d',d]].forEach(([k,v])=>{document.getElementById(k+'v').textContent=v.toFixed(2);document.getElementById(k+'b').style.width=(v*100).toFixed(0)+'%'});
+  document.getElementById('iou').textContent=io.toFixed(2);
+  document.getElementById('cnt').textContent='Voxel counts: TP '+tp+', FP '+fp+', FN '+fn;
+  let m;
+  if(d>0.97)m='Near-perfect overlap: almost no orange or red, so all three metrics agree.';
+  else if(pr>0.97&&rc<0.95)m='Under-segmenting: everything predicted is real (precision high), but chunks of the object are missed (recall low). Dice drops with recall.';
+  else if(rc>0.97&&pr<0.95)m='Over-segmenting: the whole object is caught (recall high), but the mask bleeds into background (precision low). Dice drops with precision.';
+  else if(tp===0)m='No overlap at all: every metric is zero, no matter how close the shapes look.';
+  else m='Mixed errors: both orange and red are present, so precision and recall both fall and Dice sits between them, closer to the lower one.';
+  document.getElementById('diag').textContent=m;
+}
+function setP(d,s){document.getElementById('dx').value=d;document.getElementById('sc').value=s;draw()}
+document.getElementById('dx').oninput=draw;
+document.getElementById('sc').oninput=draw;
+draw();
+</script>
+</body>
+</html>
