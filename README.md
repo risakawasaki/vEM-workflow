@@ -32,8 +32,7 @@ cryo-vem-pipeline/
 │   ├── 01-artifact-correction.md
 │   ├── 02-segmentation.md
 │   ├── 03-proofreading.md
-│   ├── 04-statistical-analysis.md
-│   └── images/                       ← figures used in the docs
+│   └── 04-statistical-analysis.md
 └── scripts/
     ├── destriping/                   ← step 1
     │   ├── destripe.py               ← core wavelet–Fourier filter
