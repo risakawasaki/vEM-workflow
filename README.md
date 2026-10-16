@@ -1,4 +1,4 @@
-# Cryo-vEM Pipeline
+# Cryo-vEM Workflow
 
 Step-by-step documentation and scripts for cryogenic volume electron microscopy (cryo-vEM) of tissue imaged by cryo-FIB/SEM: from raw image stacks to segmented, proofread, and measured organelles.
 
